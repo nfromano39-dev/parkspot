@@ -65,19 +65,7 @@ function getMaps() {
   return mapsPromise;
 }
 
-// ─── MOCK LISTINGS (fallback if DB empty) ────────────────────────────────────
-const MOCK_LISTINGS = [
-  { id: 1, owner_name: "Mike T.", address: "247 Tremont St, Boston MA", lat: 42.3601, lng: -71.0636, near: "TD Garden", price: 28, rating: 4.9, reviews: 43, type: "Driveway", covered: false, ev: false, city: "Boston", category: "Sports", color: "#1a3a5c", tags: ["Celtics", "Bruins"], availability: "Game days" },
-  { id: 2, owner_name: "Sarah K.", address: "58 Canal St, Boston MA", lat: 42.3625, lng: -71.0603, near: "TD Garden", price: 35, rating: 4.8, reviews: 61, type: "Private lot", covered: true, ev: true, city: "Boston", category: "Sports", color: "#1a4a2e", tags: ["Covered", "EV"], availability: "Always" },
-  { id: 3, owner_name: "James R.", address: "12 Boylston St, Boston MA", lat: 42.3467, lng: -71.0972, near: "Fenway Park", price: 42, rating: 5.0, reviews: 19, type: "Driveway", covered: false, ev: false, city: "Boston", category: "Sports", color: "#5c1a1a", tags: ["Red Sox"], availability: "Game days" },
-  { id: 4, owner_name: "Omar S.", address: "401 W 33rd St, New York NY", lat: 40.7505, lng: -73.9934, near: "Madison Square Garden", price: 65, rating: 4.8, reviews: 91, type: "Driveway", covered: false, ev: false, city: "New York", category: "Sports", color: "#1a1a5c", tags: ["Knicks", "Rangers"], availability: "Event days" },
-  { id: 5, owner_name: "Grace T.", address: "3 JFK Access Rd, Jamaica NY", lat: 40.6413, lng: -73.7781, near: "JFK Airport", price: 18, rating: 4.7, reviews: 189, type: "Driveway", covered: false, ev: false, city: "New York", category: "Airports", color: "#1a4a4a", tags: ["Long-term", "Daily rate"], availability: "Always" },
-  { id: 6, owner_name: "Kyle M.", address: "1111 S Figueroa St, Los Angeles CA", lat: 34.0430, lng: -118.2673, near: "Crypto.com Arena", price: 55, rating: 4.9, reviews: 83, type: "Driveway", covered: false, ev: true, city: "Los Angeles", category: "Sports", color: "#4a1a2a", tags: ["Lakers", "EV"], availability: "Game nights" },
-  { id: 7, owner_name: "Brent H.", address: "9000 Airport Blvd, Los Angeles CA", lat: 33.9425, lng: -118.4081, near: "LAX Airport", price: 20, rating: 4.6, reviews: 221, type: "Garage", covered: true, ev: false, city: "Los Angeles", category: "Airports", color: "#2a4a1a", tags: ["Covered", "Shuttle"], availability: "Always" },
-  { id: 8, owner_name: "Dev K.", address: "1901 W Madison St, Chicago IL", lat: 41.8807, lng: -87.6742, near: "United Center", price: 34, rating: 4.8, reviews: 74, type: "Driveway", covered: false, ev: false, city: "Chicago", category: "Sports", color: "#1a1a3a", tags: ["Bulls", "Blackhawks"], availability: "Game nights" },
-  { id: 9, owner_name: "Carlos R.", address: "601 Biscayne Blvd, Miami FL", lat: 25.7814, lng: -80.1870, near: "Kaseya Center", price: 44, rating: 4.7, reviews: 52, type: "Private lot", covered: false, ev: true, city: "Miami", category: "Sports", color: "#5c2a1a", tags: ["Heat", "EV"], availability: "Game nights" },
-  { id: 10, owner_name: "Hana M.", address: "800 Occidental Ave S, Seattle WA", lat: 47.5914, lng: -122.3328, near: "T-Mobile Park", price: 32, rating: 4.9, reviews: 47, type: "Driveway", covered: false, ev: false, city: "Seattle", category: "Sports", color: "#1a4a3a", tags: ["Mariners"], availability: "Home games" },
-];
+
 
 const CATEGORY_ICONS = { Sports: "🏟️", Concerts: "🎵", Airports: "✈️", Hospitals: "🏥", "Convention Centers": "🤝", "Theme Parks": "🎢", Universities: "🎓" };
 
@@ -597,7 +585,7 @@ function DetailPanel({ listing, onClose, onBook }) {
 
 // ─── MAIN APP ─────────────────────────────────────────────────────────────────
 export default function ParkSpot() {
-  const [listings, setListings] = useState(MOCK_LISTINGS);
+  const [listings, setListings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState("split"); // split | list | map
   const [selected, setSelected] = useState(null);
@@ -614,7 +602,7 @@ export default function ParkSpot() {
   useEffect(() => {
     supabase.query("listings?select=*&order=created_at.desc")
       .then(data => { if (data?.length) setListings(data); })
-      .catch(() => {}) // fall back to mock data
+      .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
 
@@ -718,9 +706,11 @@ export default function ParkSpot() {
               <DetailPanel listing={selected} onClose={() => setSelected(null)} onBook={() => setBooking(selected)} />
             )}
             {filtered.length === 0 && !loading ? (
-              <div style={{ textAlign: "center", padding: "40px 0", color: "#bbb" }}>
-                <div style={{ fontSize: 36, marginBottom: 8 }}>🔍</div>
-                <div style={{ fontWeight: 600, color: "#888" }}>No spots found</div>
+              <div style={{ textAlign: "center", padding: "40px 16px", color: "#bbb" }}>
+                <div style={{ fontSize: 44, marginBottom: 12 }}>🅿️</div>
+                <div style={{ fontWeight: 700, color: "#888", fontSize: 16, marginBottom: 6 }}>No spots listed yet</div>
+                <div style={{ fontSize: 13, color: "#bbb", marginBottom: 20 }}>Be the first to list your driveway and start earning.</div>
+                <button onClick={() => setListingOpen(true)} style={{ ...S.btn, width: "auto", padding: "10px 24px", fontSize: 13 }}>+ List your space</button>
               </div>
             ) : (
               <div style={{ display: "grid", gridTemplateColumns: view === "list" ? "repeat(auto-fill, minmax(260px, 1fr))" : "1fr", gap: 10 }}>
