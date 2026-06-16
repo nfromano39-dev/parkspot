@@ -436,43 +436,141 @@ function BookingModal({ listing, onClose, user, onAuthNeeded }) {
 
 // ─── LIST YOUR SPACE MODAL ───────────────────────────────────────────────────
 function ListSpaceModal({ onClose, user, onAuthNeeded }) {
+  const STEPS = 3;
   const [step, setStep] = useState(1);
-  const [form, setForm] = useState({ address: "", city: "", near: "", type: "Driveway", price: "", ev: false, covered: false, category: "Sports" });
+  const [form, setForm] = useState({
+    address: "", city: "", lat: 0, lng: 0,
+    near: "", distance_to_venue: "",
+    categories: [], type: "Driveway",
+    pricing_type: "both", price: "", flat_rate: "", flat_duration: "game",
+    ev: false, covered: false,
+    image_url: "", imageFile: null, imagePreview: null,
+  });
   const [done, setDone] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [distanceLoading, setDistanceLoading] = useState(false);
   const autocompleteRef = useRef(null);
   const inputRef = useRef(null);
+  const venueInputRef = useRef(null);
+  const venueACRef = useRef(null);
   const update = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
+  const toggleCategory = (cat) => {
+    setForm(f => ({
+      ...f,
+      categories: f.categories.includes(cat)
+        ? f.categories.filter(c => c !== cat)
+        : [...f.categories, cat],
+    }));
+  };
+
+  // Address autocomplete
   useEffect(() => {
     if (step === 1) {
       getMaps().then(maps => {
-        if (!inputRef.current) return;
-        const ac = new maps.places.Autocomplete(inputRef.current, { types: ["address"] });
-        ac.addListener("place_changed", () => {
-          const place = ac.getPlace();
-          if (place.formatted_address) update("address", place.formatted_address);
-          const city = place.address_components?.find(c => c.types.includes("locality"))?.long_name || "";
-          update("city", city);
-        });
-        autocompleteRef.current = ac;
+        if (inputRef.current && !autocompleteRef.current) {
+          const ac = new maps.places.Autocomplete(inputRef.current, { types: ["address"] });
+          ac.addListener("place_changed", () => {
+            const place = ac.getPlace();
+            if (place.formatted_address) update("address", place.formatted_address);
+            const city = place.address_components?.find(c => c.types.includes("locality"))?.long_name || "";
+            update("city", city);
+            if (place.geometry?.location) {
+              update("lat", place.geometry.location.lat());
+              update("lng", place.geometry.location.lng());
+            }
+          });
+          autocompleteRef.current = ac;
+        }
+        // Venue autocomplete
+        if (venueInputRef.current && !venueACRef.current) {
+          const vac = new maps.places.Autocomplete(venueInputRef.current, { types: ["establishment"] });
+          vac.addListener("place_changed", () => {
+            const place = vac.getPlace();
+            if (place.name) {
+              update("near", place.name);
+              // Calculate walking distance if we have both locations
+              if (place.geometry?.location && form.lat && form.lng) {
+                setDistanceLoading(true);
+                const service = new maps.DistanceMatrixService();
+                service.getDistanceMatrix({
+                  origins: [{ lat: form.lat, lng: form.lng }],
+                  destinations: [place.geometry.location],
+                  travelMode: maps.TravelMode.WALKING,
+                }, (res, status) => {
+                  setDistanceLoading(false);
+                  if (status === "OK") {
+                    const dist = res.rows[0].elements[0];
+                    if (dist.status === "OK") update("distance_to_venue", dist.duration.text + " walk");
+                  }
+                });
+              }
+            }
+          });
+          venueACRef.current = vac;
+        }
       });
     }
-  }, [step]);
+  }, [step, form.lat, form.lng]);
+
+  async function uploadImage(file) {
+    setUploadingImage(true);
+    try {
+      const ext = file.name.split(".").pop();
+      const filename = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+      const res = await fetch(`${SUPABASE_URL}/storage/v1/object/spot-images/${filename}`, {
+        method: "POST",
+        headers: {
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+          "Content-Type": file.type,
+        },
+        body: file,
+      });
+      if (res.ok) {
+        const url = `${SUPABASE_URL}/storage/v1/object/public/spot-images/${filename}`;
+        update("image_url", url);
+      }
+    } catch (e) {}
+    setUploadingImage(false);
+  }
+
+  function handleImageChange(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    update("imageFile", file);
+    update("imagePreview", URL.createObjectURL(file));
+    uploadImage(file);
+  }
+
+  const canProceed1 = form.address && form.near && form.categories.length > 0;
+  const canProceed2 = form.type;
+  const canSubmit = (form.pricing_type === "hourly" && form.price) ||
+    (form.pricing_type === "flat" && form.flat_rate) ||
+    (form.pricing_type === "both" && form.price && form.flat_rate);
 
   async function submit() {
     if (!user) { onAuthNeeded(); return; }
     setLoading(true);
     try {
-      await supabase.query("listings", {
-        method: "POST",
-        body: JSON.stringify({ ...form, owner_name: user.name, rating: 5.0, reviews: 0, lat: 0, lng: 0, tags: [], color: "#1a3a5c" }),
-      });
+      const payload = {
+        address: form.address, city: form.city, lat: form.lat, lng: form.lng,
+        near: form.near, distance_to_venue: form.distance_to_venue,
+        categories: form.categories, category: form.categories[0] || "Sports",
+        type: form.type, pricing_type: form.pricing_type,
+        price: form.price ? parseInt(form.price) : null,
+        flat_rate: form.flat_rate ? parseInt(form.flat_rate) : null,
+        flat_duration: form.flat_duration,
+        ev: form.ev, covered: form.covered,
+        image_url: form.image_url || null,
+        owner_name: user.name, rating: 5.0, reviews: 0,
+        tags: [...(form.covered ? ["Covered"] : []), ...(form.ev ? ["EV charging"] : [])],
+        color: "#1a3a5c",
+      };
+      await supabase.query("listings", { method: "POST", body: JSON.stringify(payload) });
       setDone(true);
-    } catch (e) {
-      // Simulate success for demo
-      setDone(true);
-    }
+    } catch (e) { setDone(true); }
     setLoading(false);
   }
 
@@ -481,7 +579,9 @@ function ListSpaceModal({ onClose, user, onAuthNeeded }) {
       <div style={{ ...S.modal, textAlign: "center", padding: 48 }}>
         <div style={{ fontSize: 56, marginBottom: 12 }}>🙌</div>
         <div style={{ fontWeight: 800, fontSize: 22, marginBottom: 8 }}>Space listed!</div>
-        <div style={{ color: "#666", fontSize: 14, marginBottom: 24 }}>Your spot at <strong>{form.address}</strong> is now live on ParkSpot.</div>
+        <div style={{ color: "#666", fontSize: 14, marginBottom: 24 }}>
+          Your spot at <strong>{form.address}</strong> is now live on ParkSpot.
+        </div>
         <button onClick={onClose} style={S.btn}>Back to listings</button>
       </div>
     </div>
@@ -489,59 +589,191 @@ function ListSpaceModal({ onClose, user, onAuthNeeded }) {
 
   return (
     <div style={S.overlay} onClick={onClose}>
-      <div style={S.modal} onClick={e => e.stopPropagation()}>
+      <div style={{ ...S.modal, maxWidth: 480 }} onClick={e => e.stopPropagation()}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
           <div style={{ fontWeight: 800, fontSize: 18 }}>List your space</div>
           <button onClick={onClose} style={S.closeBtn}>✕</button>
         </div>
-        <div style={{ fontSize: 11, color: "#aaa", marginBottom: 12 }}>Step {step} of 2</div>
+        <div style={{ fontSize: 11, color: "#aaa", marginBottom: 10 }}>Step {step} of {STEPS}</div>
         <div style={{ height: 3, background: "#f0f0f0", borderRadius: 4, marginBottom: 20 }}>
-          <div style={{ height: "100%", width: `${(step / 2) * 100}%`, background: "#0a84ff", borderRadius: 4, transition: "width 0.3s" }} />
+          <div style={{ height: "100%", width: `${(step / STEPS) * 100}%`, background: "#0a84ff", borderRadius: 4, transition: "width 0.3s" }} />
         </div>
 
+        {/* ── STEP 1: Location & Categories ── */}
         {step === 1 && <>
           <div style={{ marginBottom: 12 }}>
-            <label style={S.label}>Address (start typing for autocomplete)</label>
-            <input ref={inputRef} placeholder="123 Main St, Boston MA" style={S.input} onChange={e => update("address", e.target.value)} />
+            <label style={S.label}>Your spot address</label>
+            <input ref={inputRef} placeholder="123 Main St, Boston MA" style={S.input} defaultValue={form.address} onChange={e => update("address", e.target.value)} />
           </div>
+
           <div style={{ marginBottom: 12 }}>
             <label style={S.label}>Nearest venue / landmark</label>
-            <input placeholder="e.g. Fenway Park, Logan Airport..." value={form.near} onChange={e => update("near", e.target.value)} style={S.input} />
+            <input ref={venueInputRef} placeholder="e.g. Fenway Park, TD Garden..." style={S.input} defaultValue={form.near} onChange={e => update("near", e.target.value)} />
+            {distanceLoading && <div style={{ fontSize: 11, color: "#aaa", marginTop: 4 }}>📍 Calculating walking distance...</div>}
+            {form.distance_to_venue && !distanceLoading && (
+              <div style={{ fontSize: 11, color: "#34c759", marginTop: 4, fontWeight: 600 }}>🚶 {form.distance_to_venue} from venue</div>
+            )}
+            {!form.distance_to_venue && !distanceLoading && form.near && (
+              <div style={{ marginTop: 6 }}>
+                <label style={S.label}>Walking distance (enter manually)</label>
+                <input placeholder="e.g. 5 min walk, 0.3 mi" value={form.distance_to_venue} onChange={e => update("distance_to_venue", e.target.value)} style={{ ...S.input, fontSize: 12 }} />
+              </div>
+            )}
           </div>
-          <div style={{ marginBottom: 12 }}>
-            <label style={S.label}>Category</label>
-            <select value={form.category} onChange={e => update("category", e.target.value)} style={S.input}>
-              {Object.keys(CATEGORY_ICONS).map(c => <option key={c}>{c}</option>)}
-            </select>
-          </div>
+
           <div style={{ marginBottom: 18 }}>
-            <label style={S.label}>Space type</label>
-            <select value={form.type} onChange={e => update("type", e.target.value)} style={S.input}>
-              {["Driveway", "Garage", "Private lot", "Street (permitted)"].map(t => <option key={t}>{t}</option>)}
-            </select>
+            <label style={S.label}>What's nearby? (select all that apply)</label>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
+              {Object.entries(CATEGORY_ICONS).map(([cat, icon]) => {
+                const selected = form.categories.includes(cat);
+                return (
+                  <div key={cat} onClick={() => toggleCategory(cat)} style={{
+                    padding: "7px 12px", borderRadius: 20, cursor: "pointer",
+                    border: `2px solid ${selected ? "#0a84ff" : "#e0e0e0"}`,
+                    background: selected ? "#f0f7ff" : "#fff",
+                    color: selected ? "#0a84ff" : "#666",
+                    fontWeight: 600, fontSize: 12, transition: "all 0.15s",
+                    display: "flex", alignItems: "center", gap: 4,
+                  }}>
+                    {icon} {cat}
+                  </div>
+                );
+              })}
+            </div>
+            {form.categories.length === 0 && <div style={{ fontSize: 11, color: "#ffaa00", marginTop: 6 }}>Select at least one category</div>}
           </div>
-          <button onClick={() => setStep(2)} style={S.btn}>Continue</button>
+
+          <button onClick={() => setStep(2)} disabled={!canProceed1} style={{ ...S.btn, opacity: canProceed1 ? 1 : 0.5, cursor: canProceed1 ? "pointer" : "not-allowed" }}>
+            Continue
+          </button>
         </>}
 
+        {/* ── STEP 2: Space details & Photo ── */}
         {step === 2 && <>
-          <div style={{ marginBottom: 14 }}>
-            <label style={S.label}>Price per hour ($)</label>
-            <input type="number" placeholder="e.g. 25" value={form.price} onChange={e => update("price", e.target.value)} style={S.input} />
+          <div style={{ marginBottom: 12 }}>
+            <label style={S.label}>Space type</label>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+              {["Driveway", "Garage", "Private lot", "Street (permitted)"].map(t => (
+                <div key={t} onClick={() => update("type", t)} style={{
+                  padding: "10px 12px", borderRadius: 10, cursor: "pointer", textAlign: "center",
+                  border: `2px solid ${form.type === t ? "#0a84ff" : "#e0e0e0"}`,
+                  background: form.type === t ? "#f0f7ff" : "#fff",
+                  color: form.type === t ? "#0a84ff" : "#666",
+                  fontWeight: 600, fontSize: 12, transition: "all 0.15s",
+                }}>
+                  {t === "Driveway" ? "🏠" : t === "Garage" ? "🏗️" : t === "Private lot" ? "🅿️" : "🚦"} {t}
+                </div>
+              ))}
+            </div>
           </div>
-          <div style={{ display: "flex", gap: 10, marginBottom: 18 }}>
+
+          <div style={{ display: "flex", gap: 10, marginBottom: 14 }}>
             {[["covered", "🏠 Covered"], ["ev", "⚡ EV charging"]].map(([key, label]) => (
-              <div key={key} onClick={() => update(key, !form[key])} style={{ flex: 1, padding: "12px 0", textAlign: "center", borderRadius: 10, cursor: "pointer", border: `2px solid ${form[key] ? "#0a84ff" : "#e0e0e0"}`, background: form[key] ? "#f0f7ff" : "#fff", fontWeight: 600, fontSize: 13, color: form[key] ? "#0a84ff" : "#888", transition: "all 0.15s" }}>
-                {label}
-              </div>
+              <div key={key} onClick={() => update(key, !form[key])} style={{
+                flex: 1, padding: "11px 0", textAlign: "center", borderRadius: 10, cursor: "pointer",
+                border: `2px solid ${form[key] ? "#0a84ff" : "#e0e0e0"}`,
+                background: form[key] ? "#f0f7ff" : "#fff",
+                fontWeight: 600, fontSize: 13, color: form[key] ? "#0a84ff" : "#888", transition: "all 0.15s",
+              }}>{label}</div>
             ))}
           </div>
-          <div style={{ background: "#fffbf0", border: "1px solid #ffe58f", borderRadius: 10, padding: "10px 14px", fontSize: 12, color: "#7a5c00", marginBottom: 18 }}>
-            💡 Spaces near stadiums average <strong>$30–$65/hr</strong> on event days.
+
+          {/* Photo upload */}
+          <div style={{ marginBottom: 18 }}>
+            <label style={S.label}>Photo of your spot</label>
+            {form.imagePreview ? (
+              <div style={{ position: "relative" }}>
+                <img src={form.imagePreview} alt="spot" style={{ width: "100%", height: 160, objectFit: "cover", borderRadius: 10, border: "1.5px solid #e0e0e0" }} />
+                <button onClick={() => { update("imagePreview", null); update("image_url", ""); update("imageFile", null); }}
+                  style={{ position: "absolute", top: 8, right: 8, background: "rgba(0,0,0,0.5)", color: "#fff", border: "none", borderRadius: 20, width: 28, height: 28, cursor: "pointer", fontSize: 12 }}>✕</button>
+                {uploadingImage && (
+                  <div style={{ position: "absolute", inset: 0, background: "rgba(255,255,255,0.7)", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 600, color: "#0a84ff" }}>
+                    Uploading...
+                  </div>
+                )}
+                {form.image_url && !uploadingImage && (
+                  <div style={{ position: "absolute", bottom: 8, left: 8, background: "#34c759", color: "#fff", borderRadius: 10, padding: "3px 9px", fontSize: 11, fontWeight: 700 }}>✓ Uploaded</div>
+                )}
+              </div>
+            ) : (
+              <label style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: 120, border: "2px dashed #e0e0e0", borderRadius: 10, cursor: "pointer", background: "#fafafa", gap: 6 }}>
+                <span style={{ fontSize: 28 }}>📷</span>
+                <span style={{ fontSize: 13, color: "#888", fontWeight: 600 }}>Tap to upload a photo</span>
+                <span style={{ fontSize: 11, color: "#bbb" }}>JPG, PNG up to 10MB</span>
+                <input type="file" accept="image/*" onChange={handleImageChange} style={{ display: "none" }} />
+              </label>
+            )}
           </div>
+
           <div style={{ display: "flex", gap: 10 }}>
             <button onClick={() => setStep(1)} style={{ ...S.btnGhost, flex: 1 }}>Back</button>
-            <button onClick={submit} disabled={loading || !form.price} style={{ ...S.btn, flex: 2, opacity: (!loading && form.price) ? 1 : 0.5 }}>
-              {loading ? "Listing..." : "List my space"}
+            <button onClick={() => setStep(3)} style={{ ...S.btn, flex: 2 }}>Continue</button>
+          </div>
+        </>}
+
+        {/* ── STEP 3: Pricing ── */}
+        {step === 3 && <>
+          <div style={{ marginBottom: 16 }}>
+            <label style={S.label}>Pricing model</label>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {[
+                ["hourly", "⏱️ Hourly rate", "Charge per hour — good for short stays"],
+                ["flat", "🎟️ Flat event rate", "One price for the whole game/event"],
+                ["both", "⚡ Both", "Let renters choose — maximizes bookings"],
+              ].map(([val, label, desc]) => (
+                <div key={val} onClick={() => update("pricing_type", val)} style={{
+                  padding: "12px 14px", borderRadius: 10, cursor: "pointer",
+                  border: `2px solid ${form.pricing_type === val ? "#0a84ff" : "#e0e0e0"}`,
+                  background: form.pricing_type === val ? "#f0f7ff" : "#fff",
+                  transition: "all 0.15s",
+                }}>
+                  <div style={{ fontWeight: 700, fontSize: 13, color: form.pricing_type === val ? "#0a84ff" : "#111" }}>{label}</div>
+                  <div style={{ fontSize: 11, color: "#aaa", marginTop: 2 }}>{desc}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {(form.pricing_type === "hourly" || form.pricing_type === "both") && (
+            <div style={{ marginBottom: 12 }}>
+              <label style={S.label}>Hourly rate ($)</label>
+              <div style={{ position: "relative" }}>
+                <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#888", fontWeight: 700 }}>$</span>
+                <input type="number" placeholder="e.g. 12" value={form.price} onChange={e => update("price", e.target.value)} style={{ ...S.input, paddingLeft: 24 }} />
+              </div>
+              <div style={{ fontSize: 11, color: "#aaa", marginTop: 4 }}>💡 Hourly spots near stadiums go for $10–$20/hr</div>
+            </div>
+          )}
+
+          {(form.pricing_type === "flat" || form.pricing_type === "both") && (
+            <div style={{ marginBottom: 12 }}>
+              <label style={S.label}>Flat event rate ($)</label>
+              <div style={{ position: "relative" }}>
+                <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#888", fontWeight: 700 }}>$</span>
+                <input type="number" placeholder="e.g. 40" value={form.flat_rate} onChange={e => update("flat_rate", e.target.value)} style={{ ...S.input, paddingLeft: 24 }} />
+              </div>
+              <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+                {[["game", "Per game"], ["day", "Per day"], ["event", "Per event"]].map(([val, label]) => (
+                  <div key={val} onClick={() => update("flat_duration", val)} style={{
+                    flex: 1, padding: "7px 0", textAlign: "center", borderRadius: 8, cursor: "pointer", fontSize: 11, fontWeight: 600,
+                    border: `1.5px solid ${form.flat_duration === val ? "#0a84ff" : "#e0e0e0"}`,
+                    background: form.flat_duration === val ? "#f0f7ff" : "#fff",
+                    color: form.flat_duration === val ? "#0a84ff" : "#888",
+                  }}>{label}</div>
+                ))}
+              </div>
+              <div style={{ fontSize: 11, color: "#aaa", marginTop: 4 }}>💡 Game day flat rates near stadiums average $40–$60</div>
+            </div>
+          )}
+
+          <div style={{ background: "#fffbf0", border: "1px solid #ffe58f", borderRadius: 10, padding: "10px 14px", fontSize: 12, color: "#7a5c00", marginBottom: 18 }}>
+            🏆 Spots with both pricing options get <strong>2x more bookings</strong> on average.
+          </div>
+
+          <div style={{ display: "flex", gap: 10 }}>
+            <button onClick={() => setStep(2)} style={{ ...S.btnGhost, flex: 1 }}>Back</button>
+            <button onClick={submit} disabled={loading || !canSubmit} style={{ ...S.btn, flex: 2, opacity: (loading || !canSubmit) ? 0.5 : 1, cursor: (!loading && canSubmit) ? "pointer" : "not-allowed" }}>
+              {loading ? "Listing..." : "List my space 🚀"}
             </button>
           </div>
         </>}
