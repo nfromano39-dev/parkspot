@@ -157,12 +157,115 @@ function AuthModal({ onClose, onSuccess }) {
   );
 }
 
+// ─── MAJOR VENUES ─────────────────────────────────────────────────────────────
+const MAJOR_VENUES = [
+  // Boston
+  { name: "TD Garden", lat: 42.3662, lng: -71.0621, icon: "🏟️", city: "Boston" },
+  { name: "Fenway Park", lat: 42.3467, lng: -71.0972, icon: "⚾", city: "Boston" },
+  { name: "Gillette Stadium", lat: 42.0909, lng: -71.2643, icon: "🏈", city: "Boston" },
+  { name: "Logan Airport", lat: 42.3656, lng: -71.0096, icon: "✈️", city: "Boston" },
+  // New York
+  { name: "Madison Square Garden", lat: 40.7505, lng: -73.9934, icon: "🏟️", city: "New York" },
+  { name: "Yankee Stadium", lat: 40.8296, lng: -73.9262, icon: "⚾", city: "New York" },
+  { name: "MetLife Stadium", lat: 40.8135, lng: -74.0745, icon: "🏈", city: "New York" },
+  { name: "Citi Field", lat: 40.7571, lng: -73.8458, icon: "⚾", city: "New York" },
+  { name: "Barclays Center", lat: 40.6826, lng: -73.9754, icon: "🏀", city: "New York" },
+  { name: "JFK Airport", lat: 40.6413, lng: -73.7781, icon: "✈️", city: "New York" },
+  { name: "LaGuardia Airport", lat: 40.7769, lng: -73.8740, icon: "✈️", city: "New York" },
+  // Los Angeles
+  { name: "Crypto.com Arena", lat: 34.0430, lng: -118.2673, icon: "🏀", city: "Los Angeles" },
+  { name: "Dodger Stadium", lat: 34.0739, lng: -118.2400, icon: "⚾", city: "Los Angeles" },
+  { name: "SoFi Stadium", lat: 33.9535, lng: -118.3392, icon: "🏈", city: "Los Angeles" },
+  { name: "LAX Airport", lat: 33.9425, lng: -118.4081, icon: "✈️", city: "Los Angeles" },
+  { name: "Universal Studios", lat: 34.1381, lng: -118.3534, icon: "🎢", city: "Los Angeles" },
+  // Chicago
+  { name: "United Center", lat: 41.8807, lng: -87.6742, icon: "🏒", city: "Chicago" },
+  { name: "Wrigley Field", lat: 41.9484, lng: -87.6553, icon: "⚾", city: "Chicago" },
+  { name: "Soldier Field", lat: 41.8623, lng: -87.6167, icon: "🏈", city: "Chicago" },
+  { name: "Guaranteed Rate Field", lat: 41.8300, lng: -87.6338, icon: "⚾", city: "Chicago" },
+  { name: "O'Hare Airport", lat: 41.9742, lng: -87.9073, icon: "✈️", city: "Chicago" },
+  // Miami
+  { name: "Kaseya Center", lat: 25.7814, lng: -80.1870, icon: "🏀", city: "Miami" },
+  { name: "Hard Rock Stadium", lat: 25.9580, lng: -80.2389, icon: "🏈", city: "Miami" },
+  { name: "LoanDepot Park", lat: 25.7781, lng: -80.2197, icon: "⚾", city: "Miami" },
+  { name: "Miami Int'l Airport", lat: 25.7959, lng: -80.2870, icon: "✈️", city: "Miami" },
+  // Dallas
+  { name: "American Airlines Center", lat: 32.7905, lng: -96.8103, icon: "🏟️", city: "Dallas" },
+  { name: "AT&T Stadium", lat: 32.7480, lng: -97.0928, icon: "🏈", city: "Dallas" },
+  { name: "Globe Life Field", lat: 32.7512, lng: -97.0832, icon: "⚾", city: "Dallas" },
+  { name: "DFW Airport", lat: 32.8998, lng: -97.0403, icon: "✈️", city: "Dallas" },
+  // Seattle
+  { name: "T-Mobile Park", lat: 47.5914, lng: -122.3328, icon: "⚾", city: "Seattle" },
+  { name: "Climate Pledge Arena", lat: 47.6222, lng: -122.3544, icon: "🏒", city: "Seattle" },
+  { name: "Lumen Field", lat: 47.5952, lng: -122.3316, icon: "🏈", city: "Seattle" },
+  { name: "SeaTac Airport", lat: 47.4502, lng: -122.3088, icon: "✈️", city: "Seattle" },
+  // Denver
+  { name: "Ball Arena", lat: 39.7486, lng: -105.0076, icon: "🏀", city: "Denver" },
+  { name: "Empower Field", lat: 39.7439, lng: -105.0201, icon: "🏈", city: "Denver" },
+  { name: "Coors Field", lat: 39.7559, lng: -104.9942, icon: "⚾", city: "Denver" },
+  { name: "Denver Int'l Airport", lat: 39.8561, lng: -104.6737, icon: "✈️", city: "Denver" },
+  // Philadelphia
+  { name: "Citizens Bank Park", lat: 39.9061, lng: -75.1665, icon: "⚾", city: "Philadelphia" },
+  { name: "Lincoln Financial Field", lat: 39.9008, lng: -75.1675, icon: "🏈", city: "Philadelphia" },
+  { name: "Wells Fargo Center", lat: 39.9012, lng: -75.1720, icon: "🏀", city: "Philadelphia" },
+  // Atlanta
+  { name: "Truist Park", lat: 33.8908, lng: -84.4678, icon: "⚾", city: "Atlanta" },
+  { name: "State Farm Arena", lat: 33.7573, lng: -84.3963, icon: "🏀", city: "Atlanta" },
+  { name: "Mercedes-Benz Stadium", lat: 33.7554, lng: -84.4009, icon: "🏈", city: "Atlanta" },
+  { name: "Hartsfield-Jackson Airport", lat: 33.6407, lng: -84.4277, icon: "✈️", city: "Atlanta" },
+  // Las Vegas
+  { name: "Allegiant Stadium", lat: 36.0908, lng: -115.1833, icon: "🏈", city: "Las Vegas" },
+  { name: "T-Mobile Arena", lat: 36.1028, lng: -115.1784, icon: "🏟️", city: "Las Vegas" },
+  { name: "Las Vegas Airport", lat: 36.0840, lng: -115.1537, icon: "✈️", city: "Las Vegas" },
+  // Houston
+  { name: "Minute Maid Park", lat: 29.7572, lng: -95.3556, icon: "⚾", city: "Houston" },
+  { name: "NRG Stadium", lat: 29.6847, lng: -95.4107, icon: "🏈", city: "Houston" },
+  { name: "Toyota Center", lat: 29.7508, lng: -95.3621, icon: "🏀", city: "Houston" },
+  { name: "Houston Airport (IAH)", lat: 29.9902, lng: -95.3368, icon: "✈️", city: "Houston" },
+  // San Francisco
+  { name: "Oracle Park", lat: 37.7786, lng: -122.3893, icon: "⚾", city: "San Francisco" },
+  { name: "Chase Center", lat: 37.7680, lng: -122.3877, icon: "🏀", city: "San Francisco" },
+  { name: "Levi's Stadium", lat: 37.4032, lng: -121.9698, icon: "🏈", city: "San Francisco" },
+  { name: "SFO Airport", lat: 37.6213, lng: -122.3790, icon: "✈️", city: "San Francisco" },
+];
+
 // ─── MAP COMPONENT ───────────────────────────────────────────────────────────
 function MapView({ listings, onSelect, selected }) {
   const ref = useRef(null);
   const mapRef = useRef(null);
   const markersRef = useRef([]);
+  const venueMarkersRef = useRef([]);
+  const infoWindowRef = useRef(null);
 
+  function makeVenueIcon(emoji, maps) {
+    const canvas = document.createElement("canvas");
+    canvas.width = 44; canvas.height = 52;
+    const ctx = canvas.getContext("2d");
+    // Pin shape
+    ctx.beginPath();
+    ctx.arc(22, 20, 18, 0, Math.PI * 2);
+    ctx.fillStyle = "#fff";
+    ctx.fill();
+    ctx.strokeStyle = "#e0e0e0";
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    // Triangle pointer
+    ctx.beginPath();
+    ctx.moveTo(14, 34); ctx.lineTo(30, 34); ctx.lineTo(22, 50);
+    ctx.fillStyle = "#fff";
+    ctx.fill();
+    ctx.strokeStyle = "#e0e0e0";
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    // Emoji
+    ctx.font = "20px serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(emoji, 22, 20);
+    return { url: canvas.toDataURL(), scaledSize: new maps.Size(44, 52), anchor: new maps.Point(22, 50) };
+  }
+
+  // Initialize map + venue pins
   useEffect(() => {
     getMaps().then(maps => {
       if (mapRef.current) return;
@@ -178,59 +281,89 @@ function MapView({ listings, onSelect, selected }) {
         ],
       });
 
-      markersRef.current.forEach(m => m.setMap(null));
-      markersRef.current = listings.map(listing => {
+      infoWindowRef.current = new maps.InfoWindow();
+
+      // Add venue pins
+      venueMarkersRef.current = MAJOR_VENUES.map(venue => {
+        const marker = new maps.Marker({
+          position: { lat: venue.lat, lng: venue.lng },
+          map: mapRef.current,
+          title: venue.name,
+          icon: makeVenueIcon(venue.icon, maps),
+          zIndex: 5,
+        });
+        marker.addListener("click", () => {
+          infoWindowRef.current.setContent(`
+            <div style="font-family:sans-serif;padding:4px 2px;min-width:140px">
+              <div style="font-weight:800;font-size:13px;color:#111">${venue.icon} ${venue.name}</div>
+              <div style="font-size:11px;color:#888;margin-top:2px">${venue.city}</div>
+              <div style="font-size:11px;color:#0a84ff;margin-top:4px;font-weight:600">Find parking nearby →</div>
+            </div>
+          `);
+          infoWindowRef.current.open(mapRef.current, marker);
+        });
+        return marker;
+      });
+    });
+  }, []);
+
+  // Update parking spot markers
+  useEffect(() => {
+    if (!mapRef.current || !window.google) return;
+    const maps = window.google.maps;
+
+    markersRef.current.forEach(m => m.setMap(null));
+    markersRef.current = listings
+      .filter(l => l.lat && l.lng)
+      .map(listing => {
+        const isSelected = selected?.id === listing.id;
+        const price = listing.price || listing.flat_rate || "?";
         const marker = new maps.Marker({
           position: { lat: listing.lat, lng: listing.lng },
           map: mapRef.current,
           title: listing.address,
           icon: {
             path: maps.SymbolPath.CIRCLE,
-            scale: 10,
-            fillColor: "#0a84ff",
+            scale: isSelected ? 16 : 12,
+            fillColor: isSelected ? "#ff3b30" : "#0a84ff",
             fillOpacity: 1,
             strokeColor: "#fff",
-            strokeWeight: 2,
+            strokeWeight: 2.5,
           },
-          label: { text: `$${listing.price}`, color: "#fff", fontSize: "10px", fontWeight: "bold" },
+          label: { text: `$${price}`, color: "#fff", fontSize: "10px", fontWeight: "bold" },
+          zIndex: isSelected ? 200 : 10,
         });
         marker.addListener("click", () => onSelect(listing));
         return marker;
       });
-    });
-  }, []);
 
-  useEffect(() => {
-    if (!mapRef.current || !window.google) return;
-    markersRef.current.forEach(m => m.setMap(null));
-    markersRef.current = listings.map(listing => {
-      const isSelected = selected?.id === listing.id;
-      const marker = new window.google.maps.Marker({
-        position: { lat: listing.lat, lng: listing.lng },
-        map: mapRef.current,
-        title: listing.address,
-        icon: {
-          path: window.google.maps.SymbolPath.CIRCLE,
-          scale: isSelected ? 14 : 10,
-          fillColor: isSelected ? "#ff3b30" : "#0a84ff",
-          fillOpacity: 1,
-          strokeColor: "#fff",
-          strokeWeight: 2,
-        },
-        label: { text: `$${listing.price}`, color: "#fff", fontSize: "10px", fontWeight: "bold" },
-        zIndex: isSelected ? 100 : 1,
-      });
-      marker.addListener("click", () => onSelect(listing));
-      return marker;
-    });
-
-    if (selected) {
+    if (selected && selected.lat && selected.lng) {
       mapRef.current.panTo({ lat: selected.lat, lng: selected.lng });
       mapRef.current.setZoom(15);
     }
   }, [listings, selected]);
 
-  return <div ref={ref} style={{ width: "100%", height: "100%", borderRadius: 16 }} />;
+  return (
+    <div style={{ position: "relative", width: "100%", height: "100%" }}>
+      <div ref={ref} style={{ width: "100%", height: "100%", borderRadius: 16 }} />
+      {/* Legend */}
+      <div style={{ position: "absolute", bottom: 16, right: 16, background: "rgba(255,255,255,0.95)", borderRadius: 10, padding: "10px 14px", boxShadow: "0 2px 12px rgba(0,0,0,0.15)", fontSize: 11, display: "flex", flexDirection: "column", gap: 5 }}>
+        <div style={{ fontWeight: 700, color: "#111", marginBottom: 2, fontSize: 11 }}>MAP LEGEND</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <div style={{ width: 14, height: 14, borderRadius: "50%", background: "#0a84ff", border: "2px solid #fff", boxShadow: "0 0 0 1px #0a84ff" }} />
+          <span style={{ color: "#555" }}>Parking spot</span>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <div style={{ width: 14, height: 14, borderRadius: "50%", background: "#ff3b30", border: "2px solid #fff", boxShadow: "0 0 0 1px #ff3b30" }} />
+          <span style={{ color: "#555" }}>Selected spot</span>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <span style={{ fontSize: 14 }}>📍</span>
+          <span style={{ color: "#555" }}>Venue / landmark</span>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 // ─── LISTING CARD ─────────────────────────────────────────────────────────────
