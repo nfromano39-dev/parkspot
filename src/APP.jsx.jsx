@@ -3,7 +3,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 // ─── CONFIG ──────────────────────────────────────────────────────────────────
 const SUPABASE_URL = "https://rtoqkgnxkznivhornmuj.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ0b3FrZ254a3puaXZob3JubXVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE0Njk2MzQsImV4cCI6MjA5NzA0NTYzNH0.kKL5rSeJX1OcPZwLtR66JuI6cv0Ll6D1iTVEVvX1hYk";
-const STRIPE_PK = "pk_test_51RiMszRugGAO6V0e33Vrvpwvr9g7JZA3jL6I6omNy92eLD2Q9RARFbvwgvweiGY8wy2YTe5noauvxUEfhyoCjwSu00FcQIDh2P";
+const STRIPE_PK = "pk_test_51TiMszRugGAO6V0e33Vrvpwvr9g7JZA3jL6I6omNy92eLD2Q9RARFbvwgvweiGY8wy2YTe5noauvxUEfhyoCjwSu00FcQIDh2P";
 const GMAPS_KEY = "AIzaSyCk191h9Y6eHNwtJrQeDcbWmf1xNo6YbOM";
 
 // ─── SUPABASE CLIENT ─────────────────────────────────────────────────────────
@@ -438,15 +438,46 @@ function CheckoutModal({ listing, hours, date, onClose, onSuccess }) {
     if (!cardMounted) return;
     setLoading(true);
     try {
-      // In production: call your backend to create a PaymentIntent and get client_secret
-      // For demo, we simulate success after Stripe card validation
-      const { error } = await stripeRef.current.createPaymentMethod({
-        type: "card",
-        card: cardElRef.current,
+      // 1. Call Vercel serverless function to create a PaymentIntent
+      const res = await fetch("/api/create-payment-intent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          amount: grand,
+          listing_id: listing.id,
+          listing_address: listing.address,
+          hours,
+          date,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Payment setup failed");
+      }
+      const { clientSecret } = await res.json();
+
+      // 2. Confirm payment with Stripe using the card element
+      const { error, paymentIntent } = await stripeRef.current.confirmCardPayment(clientSecret, {
+        payment_method: { card: cardElRef.current },
       });
       if (error) throw new Error(error.message);
-      // Simulate saving booking to Supabase
-      onSuccess({ total: grand, listing, hours, date });
+
+      if (paymentIntent.status === "succeeded") {
+        // 3. Save booking to Supabase
+        await supabase.query("bookings", {
+          method: "POST",
+          body: JSON.stringify({
+            listing_id: listing.id,
+            listing_address: listing.address,
+            hours,
+            date,
+            total: grand,
+            stripe_payment_intent: paymentIntent.id,
+            status: "confirmed",
+          }),
+        }).catch(() => {});
+        onSuccess({ total: grand, listing, hours, date });
+      }
     } catch (e) {
       alert(e.message);
     }
