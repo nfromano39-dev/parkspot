@@ -1,47 +1,41 @@
-const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+import Stripe from "stripe";
 
 export default async function handler(req, res) {
-  // Only allow POST
+  if (req.method === "OPTIONS") {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+    return res.status(200).end();
+  }
+
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  // CORS headers
   res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-
-  if (req.method === "OPTIONS") {
-    return res.status(200).end();
-  }
 
   try {
-    const { amount, listing_id, listing_address, renter_email, hours, date } = req.body;
+    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+    const { amount, listing_id, listing_address, hours, date } = req.body;
 
-    if (!amount || amount < 50) {
+    if (!amount || amount < 1) {
       return res.status(400).json({ error: "Invalid amount" });
     }
 
-    // Create PaymentIntent on Stripe
     const paymentIntent = await stripe.paymentIntents.create({
-      amount: Math.round(amount * 100), // Stripe uses cents
+      amount: Math.round(amount * 100),
       currency: "usd",
       metadata: {
-        listing_id: listing_id || "",
-        listing_address: listing_address || "",
-        renter_email: renter_email || "",
+        listing_id: String(listing_id || ""),
+        listing_address: String(listing_address || ""),
         hours: String(hours || ""),
-        date: date || "",
+        date: String(date || ""),
       },
-      description: `ParkSpot booking at ${listing_address} — ${hours} hr(s) on ${date}`,
     });
 
-    return res.status(200).json({
-      clientSecret: paymentIntent.client_secret,
-      paymentIntentId: paymentIntent.id,
-    });
+    return res.status(200).json({ clientSecret: paymentIntent.client_secret });
   } catch (err) {
-    console.error("Stripe error:", err);
+    console.error("Stripe error:", err.message);
     return res.status(500).json({ error: err.message });
   }
 }
