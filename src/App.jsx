@@ -992,7 +992,10 @@ export default function ParkSpot() {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("All");
   const [sortBy, setSortBy] = useState("distance");
-  const [authPending, setAuthPending] = useState(null); // action to do after login
+  const [authPending, setAuthPending] = useState(null);
+  const [bookingsOpen, setBookingsOpen] = useState(false);
+  const [myBookings, setMyBookings] = useState([]);
+  const [bookingsLoading, setBookingsLoading] = useState(false);
 
   // Load listings from Supabase
   useEffect(() => {
@@ -1020,6 +1023,22 @@ export default function ParkSpot() {
   function handleAuthSuccess(userData) {
     setUser(userData);
     setAuthOpen(false);
+  }
+
+  async function openBookings() {
+    if (!user) { setAuthOpen(true); return; }
+    setBookingsOpen(true);
+    setBookingsLoading(true);
+    try {
+      const data = await supabase.query(
+        "bookings?select=*&order=created_at.desc",
+        { headers: { Authorization: `Bearer ${user.token}` } }
+      );
+      setMyBookings(data || []);
+    } catch (e) {
+      setMyBookings([]);
+    }
+    setBookingsLoading(false);
   }
 
   return (
@@ -1059,8 +1078,11 @@ export default function ParkSpot() {
           </button>
 
           {user ? (
-            <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-              <div style={{ width: 30, height: 30, borderRadius: "50%", background: "#0a84ff", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 12 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+              <button onClick={openBookings} style={{ padding: "7px 12px", background: "#f0f7ff", color: "#0a84ff", border: "1.5px solid #0a84ff33", borderRadius: 9, fontWeight: 700, fontSize: 11, cursor: "pointer", whiteSpace: "nowrap" }}>
+                🎫 My Bookings
+              </button>
+              <div style={{ width: 30, height: 30, borderRadius: "50%", background: "#0a84ff", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 12, cursor: "pointer" }} onClick={openBookings}>
                 {user.name[0].toUpperCase()}
               </div>
               <button onClick={() => setUser(null)} style={{ fontSize: 11, color: "#aaa", background: "none", border: "none", cursor: "pointer" }}>Sign out</button>
@@ -1149,6 +1171,81 @@ export default function ParkSpot() {
       {authOpen && <AuthModal onClose={() => setAuthOpen(false)} onSuccess={handleAuthSuccess} />}
       {booking && <BookingModal listing={booking} onClose={() => setBooking(null)} user={user} onAuthNeeded={() => { setAuthOpen(true); }} />}
       {listingOpen && <ListSpaceModal onClose={() => setListingOpen(false)} user={user} onAuthNeeded={handleAuthNeeded} />}
+
+      {/* ── My Bookings Slide-out ── */}
+      {bookingsOpen && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 200 }}>
+          {/* Backdrop */}
+          <div onClick={() => setBookingsOpen(false)} style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.4)", backdropFilter: "blur(2px)" }} />
+          {/* Panel */}
+          <div style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: "100%", maxWidth: 420, background: "#fff", boxShadow: "-8px 0 32px rgba(0,0,0,0.15)", display: "flex", flexDirection: "column", zIndex: 1 }}>
+            {/* Panel header */}
+            <div style={{ padding: "20px 24px 16px", borderBottom: "1px solid #f0f0f0", display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
+              <div>
+                <div style={{ fontWeight: 800, fontSize: 20, color: "#111" }}>My Bookings</div>
+                <div style={{ fontSize: 12, color: "#aaa", marginTop: 2 }}>Hi {user?.name} 👋</div>
+              </div>
+              <button onClick={() => setBookingsOpen(false)} style={S.closeBtn}>✕</button>
+            </div>
+
+            {/* Bookings list */}
+            <div style={{ flex: 1, overflowY: "auto", padding: "16px 24px" }}>
+              {bookingsLoading ? (
+                <div style={{ textAlign: "center", padding: "60px 0", color: "#bbb" }}>
+                  <div style={{ fontSize: 32, marginBottom: 12 }}>⏳</div>
+                  <div style={{ fontWeight: 600, color: "#888" }}>Loading your bookings...</div>
+                </div>
+              ) : myBookings.length === 0 ? (
+                <div style={{ textAlign: "center", padding: "60px 0", color: "#bbb" }}>
+                  <div style={{ fontSize: 44, marginBottom: 12 }}>🎫</div>
+                  <div style={{ fontWeight: 700, color: "#888", fontSize: 16, marginBottom: 6 }}>No bookings yet</div>
+                  <div style={{ fontSize: 13, color: "#bbb", marginBottom: 20 }}>Find a spot and book your first parking space.</div>
+                  <button onClick={() => setBookingsOpen(false)} style={{ ...S.btn, width: "auto", padding: "10px 24px", fontSize: 13 }}>Browse spots</button>
+                </div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                  {myBookings.map((b, i) => (
+                    <div key={b.id || i} style={{ background: "#f8f9ff", borderRadius: 14, padding: 16, border: "1.5px solid #e8eeff" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontWeight: 700, fontSize: 14, color: "#111", marginBottom: 3 }}>📍 {b.listing_address}</div>
+                          <div style={{ fontSize: 12, color: "#888" }}>
+                            📅 {b.date} · ⏱ {b.hours} hr{b.hours > 1 ? "s" : ""}
+                          </div>
+                        </div>
+                        <div style={{ textAlign: "right", flexShrink: 0, marginLeft: 10 }}>
+                          <div style={{ fontWeight: 800, fontSize: 18, color: "#0a84ff" }}>${b.total}</div>
+                          <div style={{ fontSize: 10, color: "#bbb" }}>total paid</div>
+                        </div>
+                      </div>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <span style={{
+                          background: b.status === "confirmed" ? "#e8fff0" : "#fff8e8",
+                          color: b.status === "confirmed" ? "#00a550" : "#f5a623",
+                          border: `1px solid ${b.status === "confirmed" ? "#00a55033" : "#f5a62333"}`,
+                          borderRadius: 20, padding: "3px 10px", fontSize: 11, fontWeight: 700,
+                        }}>
+                          {b.status === "confirmed" ? "✓ Confirmed" : "⏳ Pending"}
+                        </span>
+                        <div style={{ fontSize: 10, color: "#ccc" }}>
+                          {b.created_at ? new Date(b.created_at).toLocaleDateString() : ""}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div style={{ padding: "16px 24px", borderTop: "1px solid #f0f0f0", flexShrink: 0 }}>
+              <button onClick={() => { setBookingsOpen(false); setListingOpen(true); }} style={{ ...S.btnGhost, fontSize: 13 }}>
+                + List your own space
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
